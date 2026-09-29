@@ -1,0 +1,8 @@
+.venv
+out
+experiments
+__pycache__
+**/__pycache__
+*.png
+docs
+.git
