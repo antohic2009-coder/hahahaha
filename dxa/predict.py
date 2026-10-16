@@ -43,6 +43,13 @@ def save_table(rows: list[dict], output: Path):
 
 
 def main(argv=None):
+    # на русской Windows консоль в cp1251 — символы вроде «→» роняют печать с UnicodeEncodeError;
+    # переключаем вывод в utf-8 с заменой непечатаемых символов, чтобы процесс не падал в конце
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
     ap = argparse.ArgumentParser(description="DXA-QC: контроль качества денситометрии")
     ap.add_argument("--input", required=True)
     ap.add_argument("--output", required=True)

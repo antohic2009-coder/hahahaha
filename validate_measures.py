@@ -20,6 +20,11 @@ sys.path.insert(0, str(Path(__file__).parent))
 from dxa import axis, roi
 from dxa.data import load_dataset
 
+try:  # cp1251-консоль на русской Windows не должна ронять печать
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 ap = argparse.ArgumentParser()
 ap.add_argument("--data", required=True, help="распакованный НД_для_обучения")
 images = load_dataset(ap.parse_args().data)

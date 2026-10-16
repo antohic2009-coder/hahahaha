@@ -25,6 +25,11 @@ from dxa import features
 from dxa.data import LABELS, load_dataset
 from dxa.model import CRITERIA, QualityModel
 
+try:  # cp1251-консоль на русской Windows не должна ронять печать
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 ap = argparse.ArgumentParser()
 ap.add_argument("--data", required=True, help="распакованный НД_для_обучения (с xlsx разметкой)")
 args = ap.parse_args()

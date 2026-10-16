@@ -22,6 +22,10 @@ from dxa.model import QualityModel
 
 
 def main():
+    try:  # cp1251-консоль на русской Windows не должна ронять печать
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", required=True, help="распакованный НД_для_обучения (с xlsx разметкой)")
     ap.add_argument("--out", default="models/quality_model.joblib")
