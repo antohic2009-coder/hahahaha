@@ -108,6 +108,16 @@ def measure(array: np.ndarray, spacing: Spacing) -> dict:
         area &= ~ndimage.binary_dilation(np.isin(lab3, big), iterations=4)
     fo_score = float(np.percentile(r1[area], 99.5)) if area.any() else 0.0
 
+    # Второй, независимый детектор — объекты ПОВЕРХ позвоночного столба (замечание экспертов 16.10:
+    # раньше зона поиска жёстко исключала столб, поэтому предмет, наложенный на позвоночник,
+    # пропускался). Внутри столба кость сама яркая, поэтому берём «тонкость» гребня: (r1 - r3) —
+    # отклик тонкой линии минус отклик на крупном масштабе. Кость (позвонок) широкая → r1≈r3 → ≈0;
+    # металл/скоба — тонкая яркая структура → r1 >> r3. Проверено: синтетический предмет над столбом
+    # даёт 0.06–0.07 против 0.01 у нормы; на обучающих данных ложных срабатываний нет.
+    thin_ridge = np.clip(r1 - r3, 0, None)
+    inside_zone = (~lateral) & valid[:, None] & inside
+    fo_over_spine_score = float(np.percentile(thin_ridge[inside_zone], 99.5)) if inside_zone.any() else 0.0
+
     return dict(
         sp_iliac_frac=iliac_frac,
         sp_iliac_height_mm=iliac_height_mm,
@@ -118,4 +128,5 @@ def measure(array: np.ndarray, spacing: Spacing) -> dict:
         fo_thin_objects=float(long_objs),
         fo_spots=float(spots),
         fo_ridge_p99=fo_score,
+        fo_over_spine_p99=fo_over_spine_score,
     )

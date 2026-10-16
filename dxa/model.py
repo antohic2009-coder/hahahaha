@@ -62,6 +62,12 @@ class QualityModel:
         y_fo = np.array([labels[i].get(LABEL_FOREIGN, 0) for i in sp])
         ridge = _nan([feats[i].get("fo_ridge_p99", np.nan) for i in sp], 0.0)
         self.fo_threshold = _best_threshold(y_fo, ridge)
+        # Второй детектор — объекты ПОВЕРХ столба (замечание экспертов 16.10). Порог консервативный:
+        # максимум по нормам обучающей части (ложных тревог на обучении нет), срабатывает только на
+        # сильном сигнале — чтобы не потерять предмет, наложенный на позвоночник, не вредя специфичности.
+        over = _nan([feats[i].get("fo_over_spine_p99", np.nan) for i in sp], 0.0)
+        neg_in = over[y_fo == 0]
+        self.fo_over_spine_threshold = float(neg_in.max() * 1.02) if len(neg_in) else float("inf")
 
         # --- бедро: укладка/ротация — две оценки
         fe = np.nonzero(regions == "femur")[0]
@@ -122,8 +128,16 @@ class QualityModel:
                                       "гребни подвздошных костей не видны у нижнего края" if np.isfinite(fr) and fr < ILIAC_MIN_FRAC
                                       else "гребни подвздошных костей видны")
             r = float(_nan([feat.get("fo_ridge_p99", np.nan)], 0)[0])
-            out[LABEL_FOREIGN] = (int(r >= self.fo_threshold), r,
-                                  f"тонкие яркие линии вне позвоночника: {r:.3f} (порог {self.fo_threshold:.3f})")
+            r_in = float(_nan([feat.get("fo_over_spine_p99", np.nan)], 0)[0])
+            thr_in = float(getattr(self, "fo_over_spine_threshold", float("inf")))
+            hit_lat = r >= self.fo_threshold
+            hit_in = r_in >= thr_in
+            hit = hit_lat or hit_in
+            where = "вне столба" if hit_lat else ("поверх позвоночного столба" if hit_in else "")
+            out[LABEL_FOREIGN] = (int(hit), r,
+                                  f"тонкие яркие линии вне позвоночника: {r:.3f} (порог {self.fo_threshold:.3f}); "
+                                  f"поверх столба: {r_in:.3f} (порог {thr_in:.3f})"
+                                  + (f" — обнаружено {where}" if hit else ""))
         else:
             b = feat.get("roi_margin_bottom_cm", np.nan)
             h = feat.get("field_height_cm", np.nan)
