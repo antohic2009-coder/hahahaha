@@ -141,15 +141,19 @@ class QualityModel:
         else:
             b = feat.get("roi_margin_bottom_cm", np.nan)
             h = feat.get("field_height_cm", np.nan)
-            short_bottom = bool(np.isfinite(b) and b < ROI_BOTTOM_CM)
+            rel = feat.get("femur_roi_reliable", 1.0)
             short_field = bool(np.isfinite(h) and h < FIELD_MIN_CM)
+            # при ненадёжных ориентирах (короткий скан) решение принимаем ТОЛЬКО по длине поля:
+            # отступ до малого вертела не используем (замечание экспертов 16.10)
+            short_bottom = bool(rel and np.isfinite(b) and b < ROI_BOTTOM_CM)
             # оценка — насколько не хватает до нормы ТЗ (больше — хуже)
             deficit = max(ROI_BOTTOM_CM - float(_nan([b], 0)[0]), FIELD_MIN_CM - float(_nan([h], FIELD_MIN_CM)[0]))
             out[LABEL_ROI] = (int(short_bottom or short_field), deficit,
                               f"ниже малого вертела {b:.1f} см (норма ТЗ ≥ {ROI_BOTTOM_CM:g}); длина скана {h:.1f} см "
                               f"(минимум {FIELD_MIN_CM:g}); сверху {feat.get('roi_margin_top_cm', np.nan):.1f}, "
                               f"медиально {feat.get('roi_margin_medial_cm', np.nan):.1f} см"
-                              + ("; скан слишком короткий — бедро не помещается" if short_field else ""))
+                              + ("; скан слишком короткий — бедро не помещается" if short_field else "")
+                              + ("; ориентиры ненадёжны — решение только по длине скана" if not rel else ""))
             area_mm2 = float(_nan([feat.get("rot_lt_area_mm2", np.nan)], self.area_fill)[0])
             area = float(np.log1p(max(area_mm2, 0.0)))
             off = float(_nan([feat.get("rot_offset_mm", np.nan)], self.off_fill)[0])

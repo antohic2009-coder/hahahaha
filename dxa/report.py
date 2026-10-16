@@ -56,15 +56,22 @@ def overlay(it) -> P.Image:
     else:
         lm = roi.landmarks(it.array, spacing, it.side)
         if lm:
-            x0, y0, x1, y1 = [v * scale for v in lm["box"]]
-            ok = not crit.get("Некорректная область интереса", (0,))[0]
-            d.rectangle([x0, y0, x1, y1], outline=GREEN if ok else RED, width=3)
             hx, hy, r = lm["head"]
             ok = not crit.get("Некорректная укладка", (0,))[0]
             d.ellipse([(hx - r) * scale, (hy - r) * scale, (hx + r) * scale, (hy + r) * scale],
                       outline=GREEN if ok else RED, width=3)
-            yb = lm["lt_bottom"] * scale
-            d.line([(x0, yb), (x1, yb)], fill=YELLOW, width=2)
+            if lm.get("reliable", True):
+                x0, y0, x1, y1 = [v * scale for v in lm["box"]]
+                ok = not crit.get("Некорректная область интереса", (0,))[0]
+                d.rectangle([x0, y0, x1, y1], outline=GREEN if ok else RED, width=3)
+                yb = lm["lt_bottom"] * scale
+                d.line([(x0, yb), (x1, yb)], fill=YELLOW, width=2)
+            else:
+                # Замечание экспертов 16.10: на коротком скане рамку области интереса не рисуем —
+                # она ошибочно сегментирует посторонние структуры. Показываем только причину.
+                d.text((8, img.height - 2 * max(11, img.width // 70) - 8),
+                       f"область интереса: ориентиры ненадёжны ({lm.get('reliable_reason', '')})",
+                       font=_font(max(11, img.width // 70)), fill=(255, 215, 0))
     # подпись
     lines = [("ЕСТЬ НАРУШЕНИЕ" if bad else "КАЧЕСТВЕННОЕ", RED if bad else GREEN)]
     lines += [(f"{'[НАРУШЕНИЕ]' if flag else '[норма]'} {name}", RED if flag else GREEN) for name, (flag, _, _) in crit.items()]

@@ -21,6 +21,9 @@ MARGIN_TOP_CM = 3.0
 MARGIN_BOTTOM_CM = 3.0
 MARGIN_SIDE_CM = 2.0
 FEMUR_LEVEL = 0.08
+# ТЗ: область интереса бедра ~7 см + по 3 см сверху и снизу = минимум 13 см снятого поля.
+# Скан короче — бедро почти не попало в кадр, ориентиры и рамка ненадёжны (замечание экспертов 16.10).
+ROI_MIN_FIELD_CM = 13.0
 
 
 def normalize(array: np.ndarray) -> np.ndarray:
@@ -158,14 +161,26 @@ def landmarks(array: np.ndarray, spacing: Spacing, side: str | None = None) -> d
     margin_right = min(field_side(y, False) - roi_right for y in ys_roi) * sx / 10
     margin_medial, margin_lateral = (margin_left, margin_right) if medial == "left" else (margin_right, margin_left)
 
+    # Надёжность ориентиров (замечание экспертов 16.10): на коротком скане рамка области интереса
+    # ошибочно сегментирует посторонние структуры, и по ней нельзя делать вывод. Флаг сообщает
+    # потребителю (оверлей, отчёт), что рамку рисовать не следует.
+    field_height_cm = float(field.any(axis=1).sum() * sy / 10)
+    if field_height_cm < ROI_MIN_FIELD_CM:
+        reliable, reason = False, "короткий скан: поле {:.1f} см < {:g} см".format(field_height_cm, ROI_MIN_FIELD_CM)
+    elif head_top < 0:
+        reliable, reason = False, "верх головки бедра за кадром"
+    else:
+        reliable, reason = True, ""
+
     return dict(
         mask=mask, field=field, medial=medial,
         head=(hx, hy, radius), gt_lateral=gt_lateral, lt_bottom=lt_bottom,
         box=(roi_left, top_y, roi_right, bottom_y),
+        reliable=reliable, reliable_reason=reason,
         roi_margin_top_cm=float(margin_top), roi_margin_bottom_cm=float(margin_bottom),
         roi_margin_medial_cm=float(margin_medial), roi_margin_lateral_cm=float(margin_lateral),
         roi_height_cm=float((bottom_y - top_y) * sy / 10),
-        field_height_cm=float(field.any(axis=1).sum() * sy / 10),
+        field_height_cm=field_height_cm,
     )
 
 
@@ -173,8 +188,10 @@ def measure(array: np.ndarray, spacing: Spacing, side: str | None = None) -> dic
     lm = landmarks(array, spacing, side)
     if lm is None:
         return dict(roi_margin_top_cm=np.nan, roi_margin_bottom_cm=np.nan,
-                    roi_margin_medial_cm=np.nan, roi_margin_lateral_cm=np.nan)
+                    roi_margin_medial_cm=np.nan, roi_margin_lateral_cm=np.nan,
+                    field_height_cm=np.nan, femur_roi_reliable=0.0)
     out = {k: v for k, v in lm.items() if k.startswith(("roi_", "field_"))}
+    out["femur_roi_reliable"] = 1.0 if lm.get("reliable", True) else 0.0
     out["femur_ischium_frac"] = ischium_fraction(array, lm)
     return out
 
