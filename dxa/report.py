@@ -40,6 +40,8 @@ def overlay(it) -> P.Image:
     d = ImageDraw.Draw(img)
     crit = it.result.get("criteria", {})
     spacing = it.result.get("spacing", (0.6, 0.6))
+    feats = it.result.get("features", {})
+    small = _font(max(11, img.width // 70))
     bad = any(flag for flag, _, _ in crit.values())
     if it.region == "spine":
         ys, xs = axis.centerline(it.array, spacing)
@@ -50,6 +52,10 @@ def overlay(it) -> P.Image:
             ok = not crit.get("Не выравнена ось позвоночника", (0,))[0]
             d.line([bot, top], fill=GREEN if ok else RED, width=4)
             d.line([bot, (bot[0], top[1])], fill=CYAN, width=2)
+            ang = feats.get("axis_chord15_deg")
+            if ang is not None and np.isfinite(ang):
+                d.text((top[0] + 8, top[1] + 4), f"наклон {ang:.1f}°", font=small,
+                       fill=GREEN if ok else RED)
         h = a.shape[0] * scale
         ok = not crit.get("Некорректная укладка", (0,))[0]
         d.rectangle([2, h * 0.75, a.shape[1] * scale - 3, h - 3], outline=GREEN if ok else RED, width=3)
@@ -58,8 +64,30 @@ def overlay(it) -> P.Image:
         if lm:
             hx, hy, r = lm["head"]
             ok = not crit.get("Некорректная укладка", (0,))[0]
+            color = GREEN if ok else RED
+            # ось диафиза и офсет головки — на что система смотрит при оценке ротации
+            sc = lm.get("shaft_center")
+            if sc is not None:
+                d.line([(sc * scale, 0), (sc * scale, a.shape[0] * scale)], fill=CYAN, width=2)
+                d.line([(hx * scale, hy * scale), (sc * scale, hy * scale)], fill=CYAN, width=2)
+                d.text((min(hx, sc) * scale + 4, max(hy * scale - 14, 0)), "офсет головки", font=small, fill=CYAN)
             d.ellipse([(hx - r) * scale, (hy - r) * scale, (hx + r) * scale, (hy + r) * scale],
-                      outline=GREEN if ok else RED, width=3)
+                      outline=color, width=3)
+            # зона седалищной кости (ТЗ: должна быть представлена) — медиальнее и ниже головки
+            yz0, yz1 = int(hy + 1.2 * r) * scale, int(hy + 3.0 * r) * scale
+            if lm["medial"] == "left":
+                zx0, zx1 = 0, int(max(hx - 0.3 * r, 0)) * scale
+            else:
+                zx0, zx1 = int(min(hx + 0.3 * r, a.shape[1] - 1)) * scale, a.shape[1] * scale
+            d.rectangle([zx0, yz0, zx1, yz1], outline=(170, 170, 255), width=2)
+            d.text((zx0 + 4, yz0 + 2), "седалищная кость", font=small, fill=(170, 170, 255))
+            # малый вертел
+            lp = lm.get("lt_peak")
+            if lp:
+                lx, ly = lp
+                d.ellipse([(lx - 4) * scale, (ly - 4) * scale, (lx + 4) * scale, (ly + 4) * scale],
+                          outline=YELLOW, width=2)
+                d.text((lx * scale + 6, ly * scale), "малый вертел", font=small, fill=YELLOW)
             if lm.get("reliable", True):
                 x0, y0, x1, y1 = [v * scale for v in lm["box"]]
                 ok = not crit.get("Некорректная область интереса", (0,))[0]
@@ -69,9 +97,9 @@ def overlay(it) -> P.Image:
             else:
                 # Замечание экспертов 16.10: на коротком скане рамку области интереса не рисуем —
                 # она ошибочно сегментирует посторонние структуры. Показываем только причину.
-                d.text((8, img.height - 2 * max(11, img.width // 70) - 8),
+                d.text((8, img.height - 2 * small.size - 8),
                        f"область интереса: ориентиры ненадёжны ({lm.get('reliable_reason', '')})",
-                       font=_font(max(11, img.width // 70)), fill=(255, 215, 0))
+                       font=small, fill=(255, 215, 0))
     # подпись
     lines = [("ЕСТЬ НАРУШЕНИЕ" if bad else "КАЧЕСТВЕННОЕ", RED if bad else GREEN)]
     lines += [(f"{'[НАРУШЕНИЕ]' if flag else '[норма]'} {name}", RED if flag else GREEN) for name, (flag, _, _) in crit.items()]

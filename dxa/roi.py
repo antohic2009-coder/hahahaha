@@ -124,6 +124,7 @@ def landmarks(array: np.ndarray, spacing: Spacing, side: str | None = None) -> d
     # нижний край — где контур возвращается к линии диафиза
     band = [r for r in range(int(hy + radius), y1 + 1) if mask[r].any()]
     lt_bottom = float(hy + radius)
+    lt_peak = None  # вершина малого вертела (x, y) — для анатомической разметки
     if len(band) > 10:
         edge = np.array([(np.nonzero(mask[r])[0].min() if medial == "left" else np.nonzero(mask[r])[0].max())
                          for r in band], dtype=float)
@@ -131,6 +132,7 @@ def landmarks(array: np.ndarray, spacing: Spacing, side: str | None = None) -> d
         protrusion = (edge - shaft_edge) * sign * sx  # мм медиальнее линии диафиза
         protrusion = ndimage.median_filter(protrusion, 5)
         peak = int(np.argmax(protrusion))
+        lt_peak = (float(edge[peak]), float(band[peak]))
         after = np.nonzero(protrusion[peak:] < max(3.0, protrusion[peak] * 0.2))[0]
         lt_bottom = float(band[peak + int(after[0])] if len(after) else band[-1])
 
@@ -175,6 +177,7 @@ def landmarks(array: np.ndarray, spacing: Spacing, side: str | None = None) -> d
     return dict(
         mask=mask, field=field, medial=medial,
         head=(hx, hy, radius), gt_lateral=gt_lateral, lt_bottom=lt_bottom,
+        shaft_center=float(shaft_center), lt_peak=lt_peak,
         box=(roi_left, top_y, roi_right, bottom_y),
         reliable=reliable, reliable_reason=reason,
         roi_margin_top_cm=float(margin_top), roi_margin_bottom_cm=float(margin_bottom),
